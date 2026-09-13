@@ -18,7 +18,7 @@ def run_web():
 
 # Берем API-ключ из безопасных настроек Render
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-TELEGRAM_BOT_TOKEN = "8699795204:AAHPdN3abd4uWolE2c9_CpYNu7V4oB0gOjg"
+TELEGRAM_BOT_TOKEN = "8699795204:AAHu2uUhZqRMNuHtP4Yc4NotSeDJSvHrdYI"
 
 def ask_gemini(prompt_text):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
