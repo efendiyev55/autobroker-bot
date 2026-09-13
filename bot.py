@@ -20,8 +20,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = "8699795204:AAHu2uUhZqRMNuHtP4Yc4NotSeDJSvHrdYI"
 
 def ask_gemini(prompt_text):
-    # Обновлено на gemini-3.6-flash согласно требованию API
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt_text}]}]
@@ -36,20 +35,24 @@ def ask_gemini(prompt_text):
 def search_turbo(query_text):
     search_url = f"https://turbo.az/autos?q[full_text]={requests.utils.quote(query_text)}"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
     }
     
     try:
-        response = requests.get(search_url, headers=headers, timeout=10)
+        response = requests.get(search_url, headers=headers, timeout=12)
         soup = BeautifulSoup(response.text, 'html.parser')
         
         listings = []
-        for item in soup.select('.products-i')[:15]:
+        # Расширенный селектор карточек объявлений
+        items = soup.select('.products-i') or soup.select('.products-container .products-i')
+        
+        for item in items[:15]:
             title = item.select_one('.products-i__name')
-            price = item.select_one('.product-price')
+            price = item.select_one('.product-price') or item.select_one('.products-i__price')
             link = item.select_one('a')
-            if title and price and link:
-                listings.append(f"{title.text.strip()} | {price.text.strip()} | https://turbo.az{link['href']}")
+            if title and link:
+                price_text = price.text.strip() if price else "Цена не указана"
+                listings.append(f"{title.text.strip()} | {price_text} | https://turbo.az{link['href']}")
                 
         return "\n".join(listings)
     except Exception as e:
@@ -60,16 +63,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔍 Ищу варианты на Turbo.az...")
 
     try:
-        parse_prompt = f"Извлеки только марку и модель авто на английском из текста: {user_text}"
+        # Извлекаем только марку и модель без года для точного поиска
+        parse_prompt = f"Извлеки из текста ТОЛЬКО марку и модель автомобиля на английском без года и лишних слов: {user_text}"
         search_query = ask_gemini(parse_prompt).strip()
         
         raw_cars = search_turbo(search_query)
 
-        if not raw_cars or "Ошибка" in raw_cars:
-            await update.message.reply_text("Не удалось получить предложения с Turbo.az.")
+        # Если поиск по модели не дал результатов, пробуем прямой запрос
+        if not raw_cars:
+            raw_cars = search_turbo(user_text)
+
+        if not raw_cars:
+            await update.message.reply_text("По вашему запросу объявлений на Turbo.az не найдено. Попробуйте написать просто марку и модель (например: Changan UNI-Z).")
             return
 
-        ai_prompt = f"Запрос клиента: {user_text}\nНайденные варианты: {raw_cars}\nВыбери 3 самых выгодных. Выведи: Название, Цена, Почему выгодно, Ссылка."
+        ai_prompt = f"Запрос клиента: {user_text}\nНайденные варианты:\n{raw_cars}\nВыбери 3 самых подходящих варианта. Выведи: Название, Цена, Краткий комментарий, Ссылка."
         final_analysis = ask_gemini(ai_prompt)
         await update.message.reply_text(final_analysis)
     except Exception as e:
@@ -86,3 +94,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
