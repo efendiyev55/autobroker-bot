@@ -20,7 +20,8 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = "8699795204:AAHu2uUhZqRMNuHtP4Yc4NotSeDJSvHrdYI"
 
 def ask_gemini(prompt_text):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # Установлена требуемая модель gemini-3.6-flash
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt_text}]}]
@@ -43,7 +44,6 @@ def search_turbo(query_text):
         soup = BeautifulSoup(response.text, 'html.parser')
         
         listings = []
-        # Расширенный селектор карточек объявлений
         items = soup.select('.products-i') or soup.select('.products-container .products-i')
         
         for item in items[:15]:
@@ -63,18 +63,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔍 Ищу варианты на Turbo.az...")
 
     try:
-        # Извлекаем только марку и модель без года для точного поиска
         parse_prompt = f"Извлеки из текста ТОЛЬКО марку и модель автомобиля на английском без года и лишних слов: {user_text}"
         search_query = ask_gemini(parse_prompt).strip()
         
         raw_cars = search_turbo(search_query)
 
-        # Если поиск по модели не дал результатов, пробуем прямой запрос
         if not raw_cars:
             raw_cars = search_turbo(user_text)
 
         if not raw_cars:
-            await update.message.reply_text("По вашему запросу объявлений на Turbo.az не найдено. Попробуйте написать просто марку и модель (например: Changan UNI-Z).")
+            await update.message.reply_text("По вашему запросу объявлений на Turbo.az не найдено.")
             return
 
         ai_prompt = f"Запрос клиента: {user_text}\nНайденные варианты:\n{raw_cars}\nВыбери 3 самых подходящих варианта. Выведи: Название, Цена, Краткий комментарий, Ссылка."
@@ -94,4 +92,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
