@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import threading
 from flask import Flask
 import requests
@@ -21,38 +22,46 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = "8699795204:AAHu2uUhZqRMNuHtP4Yc4NotSeDJSvHrdYI"
 
 def ask_gemini(prompt_text):
-    # Возвращена рабочая модель gemini-3.6-flash
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt_text}]}]
     }
-    res = requests.post(url, headers=headers, json=payload, timeout=35)
-    res_json = res.json()
-    if res.status_code == 200:
-        return res_json['candidates'][0]['content']['parts'][0]['text']
-    elif res.status_code == 429:
-        raise Exception("429_LIMIT")
-    else:
-        raise Exception(f"Gemini API Error {res.status_code}: {res_json}")
+    
+    # Добавлен цикл автоматических повторов при лимите 429
+    for attempt in range(3):
+        res = requests.post(url, headers=headers, json=payload, timeout=35)
+        if res.status_code == 200:
+            res_json = res.json()
+            return res_json['candidates'][0]['content']['parts'][0]['text']
+        elif res.status_code == 429:
+            time.sleep(4 * (attempt + 1))  # Авто-пауза 4 сек, затем 8 сек
+        else:
+            res_json = res.json()
+            raise Exception(f"Gemini API Error {res.status_code}: {res_json}")
+            
+    raise Exception("429_LIMIT")
 
 def extract_search_term_python(user_text):
-    """Вытаскивает марку и модель из текста без запроса к AI (экономит 50% лимитов)"""
-    marka = re.search(r'Marka:\s*([^\n]+)', user_text, re.IGNORECASE)
-    model = re.search(r'Model:\s*([^\n]+)', user_text, re.IGNORECASE)
+    """Вытаскивает марку/модель, игнорируя 'Fərq etmir'"""
+    marka_match = re.search(r'Marka:\s*([^\n]+)', user_text, re.IGNORECASE)
+    model_match = re.search(r'Model:\s*([^\n]+)', user_text, re.IGNORECASE)
     
-    term = ""
-    if marka:
-        term += marka.group(1).strip() + " "
-    if model:
-        term += model.group(1).strip()
+    marka = marka_match.group(1).strip() if marka_match else ""
+    model = model_match.group(1).strip() if model_match else ""
+    
+    ignore_words = ["fərq etmir", "ferq etmir", "fark etmez", "любая", "любой"]
+    
+    term_parts = []
+    if marka and not any(w in marka.lower() for w in ignore_words):
+        term_parts.append(marka)
+    if model and not any(w in model.lower() for w in ignore_words):
+        term_parts.append(model)
         
-    if term.strip():
-        return term.strip()
+    if term_parts:
+        return " ".join(term_parts)
         
-    clean_text = re.sub(r'[^\w\s]', '', user_text)
-    words = [w for w in clean_text.split() if len(w) > 2]
-    return " ".join(words[:2]) if words else "Changan"
+    return "sedan"  # Значение по умолчанию, если указано "Fərq etmir"
 
 def search_turbo(query_text):
     search_url = f"https://turbo.az/autos?q[full_text]={requests.utils.quote(query_text)}"
@@ -119,7 +128,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(final_analysis, disable_web_page_preview=False)
     except Exception as e:
         if str(e) == "429_LIMIT":
-            await update.message.reply_text("⚠️ Sistemdə çoxlu sorğu var. Zəhmət olmasa 30 saniyə sonra yenidən cəhd edin.")
+            await update.message.reply_text("⚠️ Serverdə yüksək yüklənmə var. Zəhmət olmasa 10-15 saniyə sonra yenidən cəhd edin.")
         else:
             await update.message.reply_text(f"Texniki xəta baş verdi: {e}")
 
