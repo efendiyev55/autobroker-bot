@@ -21,13 +21,13 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = "8699795204:AAHu2uUhZqRMNuHtP4Yc4NotSeDJSvHrdYI"
 
 def ask_gemini(prompt_text):
-    # Используем актуальную модель gemini-2.5-flash
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # Возвращена рабочая модель gemini-3.6-flash
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt_text}]}]
     }
-    res = requests.post(url, headers=headers, json=payload, timeout=30)
+    res = requests.post(url, headers=headers, json=payload, timeout=35)
     res_json = res.json()
     if res.status_code == 200:
         return res_json['candidates'][0]['content']['parts'][0]['text']
@@ -37,7 +37,7 @@ def ask_gemini(prompt_text):
         raise Exception(f"Gemini API Error {res.status_code}: {res_json}")
 
 def extract_search_term_python(user_text):
-    """Вытаскивает марку и модель из текста анкеты без запроса к AI"""
+    """Вытаскивает марку и модель из текста без запроса к AI (экономит 50% лимитов)"""
     marka = re.search(r'Marka:\s*([^\n]+)', user_text, re.IGNORECASE)
     model = re.search(r'Model:\s*([^\n]+)', user_text, re.IGNORECASE)
     
@@ -50,7 +50,6 @@ def extract_search_term_python(user_text):
     if term.strip():
         return term.strip()
         
-    # Если анкеты нет, очищаем от лишних слов
     clean_text = re.sub(r'[^\w\s]', '', user_text)
     words = [w for w in clean_text.split() if len(w) > 2]
     return " ".join(words[:2]) if words else "Changan"
@@ -97,7 +96,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔍 Turbo.az-dan ən yaxşı elanlar toplanılır və təhlil edilir...")
 
     try:
-        # Извлекаем поиск локально Python-кодом, снижая расход API в 2 раза
         search_query = extract_search_term_python(user_text)
         raw_cars = search_turbo(search_query)
 
@@ -115,7 +113,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
            - Avtomobilin adını və ilini
            - Qiymətini
            - Kredit/lizinq və ya büdcəyə uyğunluq şərhini
-           - Siyahıda verilən DƏQİQ BİRBAŞA ELAN LİNKİNİ (Keçid) göstər.
+           - Siyahıda verilən DƏQİQ BİRBAŞA ELAN LİNKİNİ (Keçid) göster.
         """
         final_analysis = ask_gemini(ai_prompt)
         await update.message.reply_text(final_analysis, disable_web_page_preview=False)
