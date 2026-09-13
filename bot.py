@@ -35,7 +35,6 @@ def ask_gemini(prompt_text):
 def search_turbo(query_text):
     search_url = f"https://turbo.az/autos?q[full_text]={requests.utils.quote(query_text)}"
     
-    # Имитируем реальный браузер с мобильного устройства, чтобы обходить 403 ошибку
     headers = {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -46,8 +45,7 @@ def search_turbo(query_text):
     try:
         response = requests.get(search_url, headers=headers, timeout=15)
         if response.status_code != 200:
-            # Если сайт всё же заблокировал, возвращаем прямую рабочую ссылку на результаты поиска на самом сайте
-            return f"Прямая ссылка на поиск: {search_url}"
+            return f"Axtarış keçidi: {search_url}"
             
         soup = BeautifulSoup(response.text, 'html.parser')
         listings = []
@@ -61,9 +59,9 @@ def search_turbo(query_text):
                 price_text = price.text.strip() if price else ""
                 listings.append(f"- {title.text.strip()} ({price_text}) | https://turbo.az{link['href']}")
                 
-        return "\n".join(listings) if listings else f"Прямая ссылка на поиск: {search_url}"
+        return "\n".join(listings) if listings else f"Axtarış keçidi: {search_url}"
     except Exception as e:
-        return f"Прямая ссылка на поиск: {search_url}"
+        return f"Axtarış keçidi: {search_url}"
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
@@ -82,7 +80,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         Saytdan tapılan məlumatlar / Axtarış linki:
         {raw_cars}
 
-        Tapşırıq: Müştəriyə onun büdcəsinə (19.000 AZN) və tələblərinə uyğun 3ən yaxşı variantı təqdim et. 
+        Tapşırıq: Müştəriyə onun büdcəsinə (19.000 AZN) və tələblərinə uyğun 3 ən yaxşı variantı təqdim et. 
         Hər bir model üçün adını, təxmini qiymətini, niyə uyğun olduğunu və əgər link varsa birbaşa qeyd et. 
         Üslub peşəkar avto-broker kimi olsun.
         """
@@ -97,7 +95,6 @@ def main():
     t.start()
 
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    app.app_add_handler = app.add_handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.run_polling()
 
