@@ -25,7 +25,8 @@ def ask_gemini(prompt_text):
     payload = {
         "contents": [{"parts": [{"text": prompt_text}]}]
     }
-    res = requests.post(url, headers=headers, json=payload, timeout=20)
+    # Увеличили таймаут до 35 секунд, чтобы сервер успевал обрабатывать ответ
+    res = requests.post(url, headers=headers, json=payload, timeout=35)
     res_json = res.json()
     if res.status_code == 200:
         return res_json['candidates'][0]['content']['parts'][0]['text']
@@ -39,11 +40,10 @@ def search_turbo(query_text):
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'az-AZ,az;q=0.9,en;q=0.8',
-        'Connection': 'keep-alive',
     }
     
     try:
-        response = requests.get(search_url, headers=headers, timeout=15)
+        response = requests.get(search_url, headers=headers, timeout=10)
         if response.status_code != 200:
             return f"Axtarış keçidi: {search_url}"
             
@@ -51,7 +51,7 @@ def search_turbo(query_text):
         listings = []
         items = soup.select('.products-i')
         
-        for item in items[:5]:
+        for item in items[:4]: # Ограничиваем до 4 элементов для скорости
             title = item.select_one('.products-i__name')
             price = item.select_one('.product-price')
             link = item.select_one('a')
@@ -68,21 +68,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔍 Turbo.az-dən uyğun variantlar axtarılır...")
 
     try:
-        parse_prompt = f"İstifadəçi sorğusundan yalnız avtomobil markasını (məsələn: Changan, Toyota) çıxar. Əgər yoxdursa 'Changan' yaz: {user_text}"
+        # Быстрое извлечение ключевого слова для поиска
+        parse_prompt = f"İstifadəçi sorğusundan yalnız avtomobil markasını və ya modelini (məsələn: Changan Uni-z) çıxar. Qısa yaz: {user_text}"
         search_query = ask_gemini(parse_prompt).strip()
         
         raw_cars = search_turbo(search_query)
 
         ai_prompt = f"""
-        Müştərinin sorğusu (Azərbaycan dilində cavab ver):
+        Müştərinin sorğusu:
         {user_text}
 
-        Saytdan tapılan məlumatlar / Axtarış linki:
+        Saytdan tapılan məlumatlar:
         {raw_cars}
 
-        Tapşırıq: Müştəriyə onun büdcəsinə (19.000 AZN) və tələblərinə uyğun 3 ən yaxşı variantı təqdim et. 
-        Hər bir model üçün adını, təxmini qiymətini, niyə uyğun olduğunu və əgər link varsa birbaşa qeyd et. 
-        Üslub peşəkar avto-broker kimi olsun.
+        Tapşırıq: Azərbaycan dilində peşəkar avto-broker kimi cavab ver. Müştəriyə ilkin ödəniş (8.000 AZN) və aylıq büdcə (700 AZN) şərtlərini (kredit/lizinq imkanlarını) nəzərə alaraq məsləhət ver, tapılan variantları və birbaşa axtarış keçidini təqdim et.
         """
         final_analysis = ask_gemini(ai_prompt)
         await update.message.reply_text(final_analysis)
