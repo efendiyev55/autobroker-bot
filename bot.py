@@ -20,7 +20,6 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = "8699795204:AAHu2uUhZqRMNuHtP4Yc4NotSeDJSvHrdYI"
 
 def ask_gemini(prompt_text):
-    # Установлена требуемая модель gemini-3.6-flash
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
@@ -46,7 +45,7 @@ def search_turbo(query_text):
         listings = []
         items = soup.select('.products-i') or soup.select('.products-container .products-i')
         
-        for item in items[:15]:
+        for item in items[:20]:
             title = item.select_one('.products-i__name')
             price = item.select_one('.product-price') or item.select_one('.products-i__price')
             link = item.select_one('a')
@@ -63,19 +62,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔍 Ищу варианты на Turbo.az...")
 
     try:
-        parse_prompt = f"Извлеки из текста ТОЛЬКО марку и модель автомобиля на английском без года и лишних слов: {user_text}"
+        # Просим ИИ выделить только бренд (например, Changan) для широкого поиска на сайте
+        parse_prompt = f"Извлеки из текста только марку автомобиля (например, Changan, Chery, Hyundai). Если марки нет, напиши 'autos': {user_text}"
         search_query = ask_gemini(parse_prompt).strip()
-        
+        if "autos" in search_query.lower() or len(search_query) < 2:
+            search_query = "sedan"
+
         raw_cars = search_turbo(search_query)
 
         if not raw_cars:
-            raw_cars = search_turbo(user_text)
+            raw_cars = search_turbo("sedan") # Запасной поиск
 
         if not raw_cars:
-            await update.message.reply_text("По вашему запросу объявлений на Turbo.az не найдено.")
+            await update.message.reply_text("Не удалось найти подходящие объявления на Turbo.az.")
             return
 
-        ai_prompt = f"Запрос клиента: {user_text}\nНайденные варианты:\n{raw_cars}\nВыбери 3 самых подходящих варианта. Выведи: Название, Цена, Краткий комментарий, Ссылка."
+        # ИИ сам отфильтрует то, что нашел сайт, под бюджет и параметры клиента
+        ai_prompt = f"""
+        Анкета клиента:
+        {user_text}
+
+        Найденные объявления на сайте:
+        {raw_cars}
+
+        Задача: Выбери до 3 лучших вариантов, которые ближе всего подходят по параметрам (бюджет, тип кузова, топливо). 
+        Выведи для каждого: Название, Цена, Почему подходит под запрос, Ссылка.
+        """
         final_analysis = ask_gemini(ai_prompt)
         await update.message.reply_text(final_analysis)
     except Exception as e:
