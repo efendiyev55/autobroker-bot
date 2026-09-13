@@ -3,11 +3,9 @@ import threading
 from flask import Flask
 import requests
 from bs4 import BeautifulSoup
-from google import genai
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-# Веб-сервер для фоновой работы на Render
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -18,11 +16,21 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host='0.0.0.0', port=port)
 
-# Конфигурация API
-GEMINI_API_KEY = "AQ.Ab8RN6I79GzaQdmQTO-LencoLKUUVFqfqTKDcNazw1PH7sINqg"
+GEMINI_API_KEY = "AQ.Ab8RN6LFgTpo4-xRuSe3iIpGUMVKFTFVNJYx0qlNf-c9fmVk9g"
 TELEGRAM_BOT_TOKEN = "8699795204:AAHPdN3abd4uWolE2c9_CpYNu7V4oB0gOjg"
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+def ask_gemini(prompt_text):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [{"parts": [{"text": prompt_text}]}]
+    }
+    res = requests.post(url, headers=headers, json=payload, timeout=20)
+    res_json = res.json()
+    if res.status_code == 200:
+        return res_json['candidates'][0]['content']['parts'][0]['text']
+    else:
+        raise Exception(f"Gemini API Error {res.status_code}: {res_json}")
 
 def search_turbo(query_text):
     search_url = f"https://turbo.az/autos?q[full_text]={requests.utils.quote(query_text)}"
@@ -52,8 +60,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         parse_prompt = f"Извлеки только марку и модель авто на английском из текста: {user_text}"
-        parsed_res = client.models.generate_content(model='gemini-3.6-flash', contents=parse_prompt)
-        search_query = parsed_res.text.strip()
+        search_query = ask_gemini(parse_prompt).strip()
         
         raw_cars = search_turbo(search_query)
 
@@ -62,8 +69,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         ai_prompt = f"Запрос клиента: {user_text}\nНайденные варианты: {raw_cars}\nВыбери 3 самых выгодных. Выведи: Название, Цена, Почему выгодно, Ссылка."
-        final_analysis = client.models.generate_content(model='gemini-3.6-flash', contents=ai_prompt)
-        await update.message.reply_text(final_analysis.text)
+        final_analysis = ask_gemini(ai_prompt)
+        await update.message.reply_text(final_analysis)
     except Exception as e:
         await update.message.reply_text(f"Техническая ошибка: {e}")
 
