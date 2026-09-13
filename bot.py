@@ -16,7 +16,8 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host='0.0.0.0', port=port)
 
-GEMINI_API_KEY = "AQ.Ab8RN6LFgTpo4-xRuSe3iIpGUMVKFTFVNJYx0qlNf-c9fmVk9g"
+# Берем API-ключ из безопасных настроек Render
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = "8699795204:AAHPdN3abd4uWolE2c9_CpYNu7V4oB0gOjg"
 
 def ask_gemini(prompt_text):
