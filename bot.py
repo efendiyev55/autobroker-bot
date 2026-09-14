@@ -28,14 +28,13 @@ def ask_gemini(prompt_text):
         "contents": [{"parts": [{"text": prompt_text}]}]
     }
     
-    # Добавлен цикл автоматических повторов при лимите 429
     for attempt in range(3):
         res = requests.post(url, headers=headers, json=payload, timeout=35)
         if res.status_code == 200:
             res_json = res.json()
             return res_json['candidates'][0]['content']['parts'][0]['text']
         elif res.status_code == 429:
-            time.sleep(4 * (attempt + 1))  # Авто-пауза 4 сек, затем 8 сек
+            time.sleep(4 * (attempt + 1))
         else:
             res_json = res.json()
             raise Exception(f"Gemini API Error {res.status_code}: {res_json}")
@@ -43,7 +42,6 @@ def ask_gemini(prompt_text):
     raise Exception("429_LIMIT")
 
 def extract_search_term_python(user_text):
-    """Вытаскивает марку/модель, игнорируя 'Fərq etmir'"""
     marka_match = re.search(r'Marka:\s*([^\n]+)', user_text, re.IGNORECASE)
     model_match = re.search(r'Model:\s*([^\n]+)', user_text, re.IGNORECASE)
     
@@ -61,7 +59,7 @@ def extract_search_term_python(user_text):
     if term_parts:
         return " ".join(term_parts)
         
-    return "sedan"  # Значение по умолчанию, если указано "Fərq etmir"
+    return "sedan"
 
 def search_turbo(query_text):
     search_url = f"https://turbo.az/autos?q[full_text]={requests.utils.quote(query_text)}"
@@ -94,9 +92,15 @@ def search_turbo(query_text):
                 price = price_tag.text.strip() if price_tag else "Qiymət qeyd olunmayıb"
                 attrs = attr_tag.text.strip() if attr_tag else ""
                 
-                listings.append(f"Model: {title} | Qiymət: {price} | Göstəricilər: {attrs} | Keçid: {full_url}")
+                listings.append(
+                    f"ELAN:\n"
+                    f"- Adı: {title}\n"
+                    f"- Qiyməti: {price}\n"
+                    f"- Göstəricilər: {attrs}\n"
+                    f"- BİRBAŞA LINK: {full_url}"
+                )
                 
-        return "\n".join(listings) if listings else f"Axtarış keçidi: {search_url}"
+        return "\n\n".join(listings) if listings else f"Axtarış keçidi: {search_url}"
     except Exception:
         return f"Axtarış keçidi: {search_url}"
 
@@ -112,19 +116,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         Müştərinin sorğusu:
         {user_text}
 
-        Saytdan tapılan real elanların siyahısı:
+        Turbo.az-dan tapılan real elanların siyahısı:
         {raw_cars}
 
-        Tapşırıq:
-        1. Müştərinin büdcəsinə, ilkin ödənişinə və tələblərinə uyğun olaraq yuxarıdakı siyahıdan ən yaxşı variantları seç.
+        Mütləq qaydalar:
+        1. Yuxarıdakı siyahıdan müştərinin büdcəsinə və tələblərinə ən uyğun variantları seç.
         2. Cavabı Azərbaycan dilində peşəkar avto-broker üslubunda tərtib et.
-        3. HƏR BİR VARIANT ÜÇÜN MÜTLƏQ:
-           - Avtomobilin adını və ilini
-           - Qiymətini
-           - Kredit/lizinq və ya büdcəyə uyğunluq şərhini
-           - Siyahıda verilən DƏQİQ BİRBAŞA ELAN LİNKİNİ (Keçid) göster.
+        3. HƏR BİR VARIANT ÜÇÜN MÜTLƏQ aşağıdakı formatda yaz:
+           - Avtomobilin adı və ili
+           - Qiyməti
+           - Büdcəyə uyğunluq şərhiniz
+           - BİRBAŞA ELAN LİNKİ: Siyahıda "BİRBAŞA LINK:" qarşısında yazılan https://turbo.az/autos/... URL-ni EYNİLƏ DƏQİQ OLARAQ MƏTNƏ ƏLAVƏ ET.
         """
         final_analysis = ask_gemini(ai_prompt)
+        
         await update.message.reply_text(final_analysis, disable_web_page_preview=False)
     except Exception as e:
         if str(e) == "429_LIMIT":
