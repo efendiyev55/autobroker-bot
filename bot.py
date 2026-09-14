@@ -27,13 +27,12 @@ def ask_gemini(prompt_text):
     payload = {
         "contents": [{"parts": [{"text": prompt_text}]}],
         "generationConfig": {
-            "maxOutputTokens": 800  # Ускоряет генерацию ответа
+            "maxOutputTokens": 2500  # Увеличен лимит, чтобы ответ дописывался до конца
         }
     }
     
     for attempt in range(3):
         try:
-            # Увеличен timeout до 60 секунд (10 сек на подкл, 60 сек на чтение)
             res = requests.post(url, headers=headers, json=payload, timeout=(10, 60))
             if res.status_code == 200:
                 res_json = res.json()
@@ -88,7 +87,7 @@ def search_turbo(query_text):
         listings = []
         items = soup.select('.products-i')
         
-        for item in items[:5]:  # Берем 5 лучших вариантов для быстрого анализа
+        for item in items[:5]:
             link_tag = item.select_one('a.products-i__link') or item.select_one('a')
             title_tag = item.select_one('.products-i__name')
             price_tag = item.select_one('.product-price') or item.select_one('.products-i__price')
@@ -129,13 +128,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {raw_cars}
 
         Tapşırıq:
-        1. Müştərinin büdcəsinə və tələblərinə ən uyğun 2-3 variantı seç və qısa təhlil et.
-        2. Cavabı Azərbaycan dilində peşəkar avto-broker üslubunda tərtib et.
+        1. Müştərini qısa salamla (1 cümlə).
+        2. Siyahıdan müştərinin büdcəsinə və tələblərinə en uyğun 2-3 variantı seç.
         3. HƏR BİR VARIANT ÜÇÜN MÜTLƏQ aşağıdakı formatda yaz:
            - Avtomobilin adı və ili
            - Qiyməti
-           - Şərhiniz
-           - BİRBAŞA ELAN LİNKİ: Siyahıdakı https://turbo.az/autos/... URL-ni dəqiq göstər.
+           - Qısa şərhiniz
+           - BİRBAŞA ELAN LİNKİ: Siyahıda "BİRBAŞA LINK:" qarşısında yazılan https://turbo.az/autos/... URL-ni dəqiq göstər.
         """
         final_analysis = ask_gemini(ai_prompt)
         await update.message.reply_text(final_analysis, disable_web_page_preview=False)
