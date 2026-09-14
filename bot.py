@@ -25,19 +25,28 @@ def ask_gemini(prompt_text):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
-        "contents": [{"parts": [{"text": prompt_text}]}]
+        "contents": [{"parts": [{"text": prompt_text}]}],
+        "generationConfig": {
+            "maxOutputTokens": 800  # Ускоряет генерацию ответа
+        }
     }
     
     for attempt in range(3):
-        res = requests.post(url, headers=headers, json=payload, timeout=35)
-        if res.status_code == 200:
-            res_json = res.json()
-            return res_json['candidates'][0]['content']['parts'][0]['text']
-        elif res.status_code == 429:
-            time.sleep(4 * (attempt + 1))
-        else:
-            res_json = res.json()
-            raise Exception(f"Gemini API Error {res.status_code}: {res_json}")
+        try:
+            # Увеличен timeout до 60 секунд (10 сек на подкл, 60 сек на чтение)
+            res = requests.post(url, headers=headers, json=payload, timeout=(10, 60))
+            if res.status_code == 200:
+                res_json = res.json()
+                return res_json['candidates'][0]['content']['parts'][0]['text']
+            elif res.status_code == 429:
+                time.sleep(4 * (attempt + 1))
+            else:
+                res_json = res.json()
+                raise Exception(f"Gemini API Error {res.status_code}: {res_json}")
+        except requests.exceptions.Timeout:
+            if attempt == 2:
+                raise Exception("TIMEOUT_ERROR")
+            time.sleep(2)
             
     raise Exception("429_LIMIT")
 
@@ -71,7 +80,7 @@ def search_turbo(query_text):
     }
     
     try:
-        response = requests.get(search_url, headers=headers, timeout=12)
+        response = requests.get(search_url, headers=headers, timeout=10)
         if response.status_code != 200:
             return f"Axtarış keçidi: {search_url}"
             
@@ -79,7 +88,7 @@ def search_turbo(query_text):
         listings = []
         items = soup.select('.products-i')
         
-        for item in items[:6]:
+        for item in items[:5]:  # Берем 5 лучших вариантов для быстрого анализа
             link_tag = item.select_one('a.products-i__link') or item.select_one('a')
             title_tag = item.select_one('.products-i__name')
             price_tag = item.select_one('.product-price') or item.select_one('.products-i__price')
@@ -119,21 +128,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         Turbo.az-dan tapılan real elanların siyahısı:
         {raw_cars}
 
-        Mütləq qaydalar:
-        1. Yuxarıdakı siyahıdan müştərinin büdcəsinə və tələblərinə ən uyğun variantları seç.
+        Tapşırıq:
+        1. Müştərinin büdcəsinə və tələblərinə ən uyğun 2-3 variantı seç və qısa təhlil et.
         2. Cavabı Azərbaycan dilində peşəkar avto-broker üslubunda tərtib et.
         3. HƏR BİR VARIANT ÜÇÜN MÜTLƏQ aşağıdakı formatda yaz:
            - Avtomobilin adı və ili
            - Qiyməti
-           - Büdcəyə uyğunluq şərhiniz
-           - BİRBAŞA ELAN LİNKİ: Siyahıda "BİRBAŞA LINK:" qarşısında yazılan https://turbo.az/autos/... URL-ni EYNİLƏ DƏQİQ OLARAQ MƏTNƏ ƏLAVƏ ET.
+           - Şərhiniz
+           - BİRBAŞA ELAN LİNKİ: Siyahıdakı https://turbo.az/autos/... URL-ni dəqiq göstər.
         """
         final_analysis = ask_gemini(ai_prompt)
-        
         await update.message.reply_text(final_analysis, disable_web_page_preview=False)
     except Exception as e:
         if str(e) == "429_LIMIT":
             await update.message.reply_text("⚠️ Serverdə yüksək yüklənmə var. Zəhmət olmasa 10-15 saniyə sonra yenidən cəhd edin.")
+        elif str(e) == "TIMEOUT_ERROR":
+            await update.message.reply_text("⏱ Sorğunun cavablandırılması çox vaxt apardı. Zəhmət olmasa bir daha göndərin.")
         else:
             await update.message.reply_text(f"Texniki xəta baş verdi: {e}")
 
